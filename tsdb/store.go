@@ -190,7 +190,7 @@ func (s *Store) loadShards() error {
 						return
 					}
 
-					shard := NewShard(shardID, s.databaseIndexes[db], path, walPath, s.EngineOptions)
+					shard := NewShard(shardID, path, walPath, s.EngineOptions)
 					shard.SetLogOutput(s.logOutput)
 
 					err = shard.Open()
@@ -316,7 +316,7 @@ func (s *Store) CreateShard(database, retentionPolicy string, shardID uint64, en
 	}
 
 	path := filepath.Join(s.path, database, retentionPolicy, strconv.FormatUint(shardID, 10))
-	shard := NewShard(shardID, db, path, walPath, s.EngineOptions)
+	shard := NewShard(shardID, path, walPath, s.EngineOptions)
 	shard.SetLogOutput(s.logOutput)
 	shard.EnableOnOpen = enabled
 

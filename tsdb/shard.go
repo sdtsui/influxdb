@@ -109,10 +109,10 @@ type Shard struct {
 }
 
 // NewShard returns a new initialized Shard. walPath doesn't apply to the b1 type index
-func NewShard(id uint64, index *DatabaseIndex, path string, walPath string, options EngineOptions) *Shard {
+func NewShard(id uint64, path string, walPath string, options EngineOptions) *Shard {
 	db, rp := DecodeStorePath(path)
 	s := &Shard{
-		index:   index,
+		index:   NewDatabaseIndex(db),
 		id:      id,
 		path:    path,
 		walPath: walPath,
@@ -281,8 +281,8 @@ func (s *Shard) close() error {
 		close(s.closing)
 	}
 
-	// Don't leak our shard ID and series keys in the index
-	s.index.RemoveShard(s.id)
+	// Wipe out our index.
+	s.index = NewDatabaseIndex(s.database)
 
 	err := s.engine.Close()
 	if err == nil {
@@ -517,12 +517,27 @@ func (s *Shard) validateSeriesAndFields(points []models.Point) ([]*FieldCreate, 
 	return fieldsToCreate, nil
 }
 
+// Measurement returns the named measurement from the index.
+func (s *Shard) Measurement(name string) *Measurement {
+	return s.index.Measurement(name)
+}
+
+// Measurements returns a slice of all measurements from the index.
+func (s *Shard) Measurements() []*Measurement {
+	return s.index.Measurements()
+}
+
 // SeriesCount returns the number of series buckets on the shard.
 func (s *Shard) SeriesCount() (int, error) {
 	if err := s.ready(); err != nil {
 		return 0, err
 	}
 	return s.engine.SeriesCount()
+}
+
+// Series returns a series by key.
+func (s *Shard) Series(key string) *Series {
+	return s.index.Series(key)
 }
 
 // WriteTo writes the shard's data to w.
