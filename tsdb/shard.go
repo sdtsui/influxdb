@@ -198,6 +198,9 @@ func (s *Shard) Statistics(tags map[string]string) []models.Statistic {
 			statDiskBytes:      atomic.LoadInt64(&s.stats.DiskBytes),
 		},
 	}}
+
+	// Add the index and engine statistics.
+	statistics = append(statistics, s.index.Statistics(tags)...)
 	statistics = append(statistics, s.engine.Statistics(tags)...)
 	return statistics
 }
@@ -416,15 +419,24 @@ func (s *Shard) DeleteSeriesRange(seriesKeys []string, min, max int64) error {
 }
 
 // DeleteMeasurement deletes a measurement and all underlying series.
-func (s *Shard) DeleteMeasurement(name string, seriesKeys []string) error {
+func (s *Shard) DeleteMeasurement(name string) error {
 	if err := s.ready(); err != nil {
 		return err
 	}
 
-	if err := s.engine.DeleteMeasurement(name, seriesKeys); err != nil {
+	// Attempt to find the series keys.
+	m := s.index.Measurement(name)
+	if m == nil {
+		return influxql.ErrMeasurementNotFound(name)
+	}
+
+	// Remove the measurement from the engine.
+	if err := s.engine.DeleteMeasurement(name, m.SeriesKeys()); err != nil {
 		return err
 	}
 
+	// Remove the measurement from the index.
+	s.index.DropMeasurement(name)
 	return nil
 }
 
@@ -525,6 +537,12 @@ func (s *Shard) Measurement(name string) *Measurement {
 // Measurements returns a slice of all measurements from the index.
 func (s *Shard) Measurements() []*Measurement {
 	return s.index.Measurements()
+}
+
+// MeasurementsByExpr takes an expression containing only tags and returns a
+// slice of matching measurements.
+func (s *Shard) MeasurementsByExpr(cond influxql.Expr) (Measurements, bool, error) {
+	return s.index.MeasurementsByExpr(cond)
 }
 
 // SeriesCount returns the number of series buckets on the shard.
